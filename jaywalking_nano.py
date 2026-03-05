@@ -13,6 +13,9 @@ CAMERA_ID = "cam_1"
 publisher = pubsub_v1.PublisherClient()
 topic_path = publisher.topic_path(PROJECT_ID, TOPIC_ID)
 
+PUBLISH_INTERVAL = 5
+last_publish_time = 0
+
 def publish_event(event_type, object_id=None, confidence=None):
     event = {
         "camera_id": CAMERA_ID,
@@ -93,9 +96,6 @@ ZONE_RIGHT = 940
 ZONE_TOP = 0
 ZONE_BOTTOM = 720
 
-PUBLISH_INTERVAL = 5
-last_publish_time = 0
-
 print("Jaywalking detection started...")
 
 while display.IsStreaming():
@@ -104,9 +104,6 @@ while display.IsStreaming():
     detections = net.Detect(img)
 
     centroids = []
-    jaywalker_present = False
-    best_object_id = None
-    best_confidence = 0.0
 
     for detection in detections:
         class_name = net.GetClassDesc(detection.ClassID)
@@ -121,9 +118,8 @@ while display.IsStreaming():
 
         cx = int((x1 + x2) / 2)
         cy = int((y1 + y2) / 2)
-        conf = round(detection.Confidence, 2)
 
-        centroids.append((cx, cy, conf))
+        centroids.append((cx, cy, round(detection.Confidence, 2)))
 
         jetson.utils.cudaDrawRect(
             img,
@@ -133,6 +129,10 @@ while display.IsStreaming():
 
     tracker_input = [(c[0], c[1]) for c in centroids]
     objects = tracker.update(tracker_input)
+
+    jaywalker_present = False
+    best_object_id = None
+    best_confidence = 0.0
 
     for object_id, centroid in objects.items():
         cx, cy = centroid
