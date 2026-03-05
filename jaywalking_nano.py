@@ -159,7 +159,7 @@ while display.IsStreaming():
             if object_id not in last_alert_time:
                 last_alert_time[object_id] = current_time
                 print("[ALERT] Jaywalking detected! ID=%d" % object_id)
-                publish_event(object_id, detection.Confidence)
+                publish_event(object_id, round(detection.Confidence, 2))
 
             else:
                 # Check cooldown
@@ -168,7 +168,7 @@ while display.IsStreaming():
                 if time_since_last > COOLDOWN_SECONDS:
                     last_alert_time[object_id] = current_time
                     print("[ALERT] Jaywalking detected! ID=%d" % object_id)
-                    publish_event(object_id, detection.Confidence)
+                    publish_event(object_id, round(detection.Confidence, 2))
 
     # Draw zone rectangle
     jetson.utils.cudaDrawRect(
@@ -181,3 +181,4 @@ while display.IsStreaming():
     display.SetStatus("Jaywalking Detection")
 
 print("Shutting down...")
+
