@@ -2,6 +2,7 @@ import jetson.inference
 import jetson.utils
 import time
 import math
+import uuid
 from collections import OrderedDict
 from google.cloud import pubsub_v1
 import json
@@ -10,37 +11,29 @@ PROJECT_ID = "cs131finalproject"
 TOPIC_ID = "jaywalking-events"
 CAMERA_ID = "cam_1"
 
+# ===== PUBSUB SETUP =====
 publisher = pubsub_v1.PublisherClient()
 topic_path = publisher.topic_path(PROJECT_ID, TOPIC_ID)
 
-PUBLISH_INTERVAL = 3.25
-last_publish_time = 0
-
-seen_present_event = False
-clear_events_sent = 0
-
-
-def publish_event(event_type, object_id=None, confidence=None):
+def publish_event(object_id, confidence):
     event = {
         "camera_id": CAMERA_ID,
-        "event_type": event_type,
+        "event_type": "jaywalking_detected",
+        "object_id": object_id,
+        "confidence": confidence,
         "timestamp": time.time()
     }
-
-    if object_id is not None:
-        event["object_id"] = object_id
-
-    if confidence is not None:
-        event["confidence"] = confidence
 
     future = publisher.publish(
         topic_path,
         json.dumps(event).encode("utf-8")
     )
 
-    print("Published:", event, "message_id:", future.result())
+    print("Published message_id:", future.result())
 
-
+# -----------------------------
+# Simple Centroid Tracker
+# -----------------------------
 class CentroidTracker:
     def __init__(self, max_disappeared=20):
         self.next_object_id = 0
@@ -85,8 +78,11 @@ class CentroidTracker:
         return self.objects
 
 
+# -----------------------------
+# Load YOLO model
+# -----------------------------
 net = jetson.inference.detectNet(
-    "ssd-mobilenet-v2",
+    "ssd-mobilenet-v2", 
     threshold=0.5
 )
 
@@ -95,6 +91,14 @@ display = jetson.utils.videoOutput("display://0")
 
 tracker = CentroidTracker()
 
+COOLDOWN_SECONDS = 3
+
+last_alert_time = {}
+
+# -----------------------------
+# Define Jaywalking Zone
+# (Adjust these coordinates!)
+# -----------------------------
 ZONE_LEFT = 340
 ZONE_RIGHT = 940
 ZONE_TOP = 0
@@ -110,6 +114,7 @@ while display.IsStreaming():
     centroids = []
 
     for detection in detections:
+
         class_name = net.GetClassDesc(detection.ClassID)
 
         if class_name != "person":
@@ -123,24 +128,22 @@ while display.IsStreaming():
         cx = int((x1 + x2) / 2)
         cy = int((y1 + y2) / 2)
 
-        centroids.append((cx, cy, round(detection.Confidence, 2)))
+        centroids.append((cx, cy))
 
+        # Draw bounding box
         jetson.utils.cudaDrawRect(
             img,
             (x1, y1, x2, y2),
             (0, 255, 0, 100)
         )
 
-    tracker_input = [(c[0], c[1]) for c in centroids]
-    objects = tracker.update(tracker_input)
+    objects = tracker.update(centroids)
 
-    jaywalker_present = False
-    best_object_id = None
-    best_confidence = 0.0
-
+    # Check jaywalking condition
     for object_id, centroid in objects.items():
         cx, cy = centroid
 
+        # Draw centroid
         jetson.utils.cudaDrawCircle(
             img,
             (cx, cy),
@@ -148,44 +151,26 @@ while display.IsStreaming():
             (255, 0, 0, 100)
         )
 
+        current_time = time.time()
+
         if (ZONE_LEFT < cx < ZONE_RIGHT) and (ZONE_TOP < cy < ZONE_BOTTOM):
-            jaywalker_present = True
-            best_object_id = object_id
 
-    if jaywalker_present:
-        for c in centroids:
-            cx, cy, conf = c
-            if (ZONE_LEFT < cx < ZONE_RIGHT) and (ZONE_TOP < cy < ZONE_BOTTOM):
-                if conf > best_confidence:
-                    best_confidence = conf
+            # If object never triggered before
+            if object_id not in last_alert_time:
+                last_alert_time[object_id] = current_time
+                print("[ALERT] Jaywalking detected! ID=%d" % object_id)
+                publish_event(object_id, round(detection.Confidence, 2))
 
-    current_time = time.time()
+            else:
+                # Check cooldown
+                time_since_last = current_time - last_alert_time[object_id]
 
-    if current_time - last_publish_time >= PUBLISH_INTERVAL:
+                if time_since_last > COOLDOWN_SECONDS:
+                    last_alert_time[object_id] = current_time
+                    print("[ALERT] Jaywalking detected! ID=%d" % object_id)
+                    publish_event(object_id, round(detection.Confidence, 2))
 
-        if jaywalker_present:
-            print("[STATE] jaywalker_present")
-            publish_event(
-                event_type="jaywalker_present",
-                object_id=best_object_id,
-                confidence=best_confidence
-            )
-
-            seen_present_event = True
-            clear_events_sent = 0
-
-        else:
-            if seen_present_event and clear_events_sent < 2:
-                print("[STATE] jaywalker_clear")
-                publish_event(event_type="jaywalker_clear")
-                clear_events_sent += 1
-
-                if clear_events_sent == 2:
-                    seen_present_event = False
-                    clear_events_sent = 0
-
-        last_publish_time = current_time
-
+    # Draw zone rectangle
     jetson.utils.cudaDrawRect(
         img,
         (ZONE_LEFT, ZONE_TOP, ZONE_RIGHT, ZONE_BOTTOM),
