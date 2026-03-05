@@ -13,8 +13,9 @@ CAMERA_ID = "cam_1"
 publisher = pubsub_v1.PublisherClient()
 topic_path = publisher.topic_path(PROJECT_ID, TOPIC_ID)
 
-PUBLISH_INTERVAL = 5
+PUBLISH_INTERVAL = 3.25
 last_publish_time = 0
+seen_present_event = False
 
 def publish_event(event_type, object_id=None, confidence=None):
     event = {
@@ -165,7 +166,9 @@ while display.IsStreaming():
                 object_id=best_object_id,
                 confidence=best_confidence
             )
-        else:
+            seen_present_event = True
+
+        elif seen_present_event:
             print("[STATE] jaywalker_clear")
             publish_event(event_type="jaywalker_clear")
 
