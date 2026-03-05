@@ -15,7 +15,10 @@ topic_path = publisher.topic_path(PROJECT_ID, TOPIC_ID)
 
 PUBLISH_INTERVAL = 3.25
 last_publish_time = 0
+
 seen_present_event = False
+clear_events_sent = 0
+
 
 def publish_event(event_type, object_id=None, confidence=None):
     event = {
@@ -159,6 +162,7 @@ while display.IsStreaming():
     current_time = time.time()
 
     if current_time - last_publish_time >= PUBLISH_INTERVAL:
+
         if jaywalker_present:
             print("[STATE] jaywalker_present")
             publish_event(
@@ -166,11 +170,19 @@ while display.IsStreaming():
                 object_id=best_object_id,
                 confidence=best_confidence
             )
-            seen_present_event = True
 
-        elif seen_present_event:
-            print("[STATE] jaywalker_clear")
-            publish_event(event_type="jaywalker_clear")
+            seen_present_event = True
+            clear_events_sent = 0
+
+        else:
+            if seen_present_event and clear_events_sent < 2:
+                print("[STATE] jaywalker_clear")
+                publish_event(event_type="jaywalker_clear")
+                clear_events_sent += 1
+
+                if clear_events_sent == 2:
+                    seen_present_event = False
+                    clear_events_sent = 0
 
         last_publish_time = current_time
 
@@ -184,4 +196,3 @@ while display.IsStreaming():
     display.SetStatus("Jaywalking Detection")
 
 print("Shutting down...")
-
