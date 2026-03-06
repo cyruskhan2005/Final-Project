@@ -1,7 +1,7 @@
 # Final-Project
 Repository for CS131 Final Project
 
-Demo Video: 
+Demo Video: https://youtu.be/VNF2vNlNqMs?si=618Dkncf8j43Pkd8 
 
 Google Slides: https://docs.google.com/presentation/d/16S3vG3C5WSDJ1cjOO2eBpCbXTSe7LKSPai93gMBVwWw/edit?usp=sharing
 
