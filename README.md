@@ -1,5 +1,5 @@
-# Final-Project
-Repository for CS131 Final Project
+# Jaywalking Detection Safety System.
+The purpose of this project is to improve driver and pedestrian safety when jaywalking occurs. Linked below is a slideshow presentation of how it works, and the architecture of the project, as well as a demo video of the project in action. There is also 3 documentation stages of the project that showcase what was being done in order to build the project.
 
 Demo Video: https://youtu.be/VNF2vNlNqMs?si=618Dkncf8j43Pkd8 
 
